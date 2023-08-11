@@ -8,7 +8,7 @@
 library("parallel")
 library("simstudy")
 library("ccaPP")
-
+library("ltm")
 
 # control parameters for data generation
 n <- 1000                               # number of observations
@@ -16,7 +16,7 @@ p <- 2                                  # number of items
 prob <- c(0.05, 0.25, 0.4, 0.25, 0.05)  # probabilities of response categories
 L <- length(prob)                       # number of response categories
 rho <- 0.7                              # target correlation between items
-R <- 1000                               # number of simulation runs
+R <- 10                                 # number of simulation runs
 seed <- 20230111                        # seed of the random number generator
 
 # define matrix with probabilities of response categories per item
