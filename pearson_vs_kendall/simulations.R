@@ -26,11 +26,6 @@ prob_mat <- matrix(prob, nrow = p, ncol = L, byrow = TRUE)
 Rho <- matrix(rho, nrow = p, ncol = p)
 diag(Rho) <- 1
 
-# control parameters for random respondents
-epsilons <- seq(0, 0.3, by = 0.05)
-epsilon_max <- max(epsilons)
-
-
 # it is very easy to use parallel computing on Unix systems, but not on Windows
 if (.Platform$OS.type == "windows") {
   n_cores <- 1              # use only one CPU core
@@ -57,58 +52,31 @@ results_list <- parallel::mclapply(seq_len(R), function(r) {
   data <- as.matrix(data[, -1])
   storage.mode(data) <- "integer"
 
-  # generate probabilities of being a random respondents
-  careless_probabilities <- runif(n)
 
-  # order observations according to probabilities of being random respondents,
-  # which makes it easier to keep previous careless respondents the same as the
-  # contamination level increases (for maximum comparability)
-  order <- order(careless_probabilities)
-  data <- data[order, ]
-  careless_probabilities <- careless_probabilities[order]
-
-  # generate random responses to be used for careless respondents
-  n_careless_max <- sum(careless_probabilities < epsilon_max)
-  data_careless <- replicate(p, sample.int(L, n_careless_max, replace = TRUE))
-
-  # loop over contamination levels
-  results_r <- lapply(epsilons, function(epsilon) {
-
-    # turn selected observations into careless respondents: since the
-    # observations are sorted according to the probability of being careless,
-    # this keeps previous careless respondents the same as the contamination
-    # level increases
-    if (epsilon > 0) {
-      careless <- which(careless_probabilities < epsilon)
-      data[careless, ] <- data_careless[careless, ]
-    }
-
-    # compute Pearson correlation
-    df_pearson <- tryCatch({
-      pearson <- ccaPP::corPearson(data[, 1], data[, 2])
-      data.frame(Run = r, epsilon = epsilon, Method = "Pearson",
+  # compute Pearson correlation
+  df_pearson <- tryCatch({
+    pearson <- ccaPP::corPearson(data[, 1], data[, 2])
+    data.frame(Run = r, Method = "Pearson",
                  Correlation = pearson)
-    }, error = function(e) NULL, warning = function(w) NULL)
+  }, error = function(e) NULL, warning = function(w) NULL)
 
-    # compute Kendall correlation
-    df_kendall <- tryCatch({
-      kendall <- ccaPP::corKendall(data[, 1], data[, 2])
-      data.frame(Run = r, epsilon = epsilon, Method = "Kendall",
-                 Correlation = kendall)
-    }, error = function(e) NULL, warning = function(w) NULL)
+  # compute Kendall correlation
+  df_kendall <- tryCatch({
+    kendall <- ccaPP::corKendall(data[, 1], data[, 2])
+    data.frame(Run = r, Method = "Kendall",
+            Correlation = kendall)
+  }, error = function(e) NULL, warning = function(w) NULL)
 
-    # combine results
-    rbind(df_pearson, df_kendall)
-
-  })
+  # combine results
+  rbind(df_pearson, df_kendall)
 
   # combine results from current simulation run into data frame
-  do.call(rbind, results_r)
+  do.call(rbind)
 
 }, mc.cores = n_cores)
 
 # combine results into data frame
-results <- do.call(rbind, results_list)
+results <- do.call(rbind)
 
 # save results to file
 file_results <- "simulations_single_script/results/results_n=%d.RData"
