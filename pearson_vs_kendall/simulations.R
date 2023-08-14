@@ -1,5 +1,5 @@
 # ------------------------------------
-# Author: Andreas Alfons
+# Author: Andreas Alfonswa
 #         Erasmus University Rotterdam
 #         Floris van den Doel
 #         Erasmus University Rotterdam
@@ -13,14 +13,14 @@ library("ccaPP")
 library("ltm")
 
 # control parameters for data generation
-n <- 1000                               # number of observations
-p_low <- 2                              # minimal number of items
-p_high <- 2                             # maximal number of items
-prob <- c(0.05, 0.25, 0.4, 0.25, 0.05)  # probabilities of response categories
-L <- length(prob)                       # number of response categories
-rho <- 0.7                              # target correlation between items
-R <- 10                                 # number of simulation runs
-seed <- 20230111                        # seed of the random number generator
+n <- 100                                           # number of observations
+p_low <- 2                                         # minimal number of items
+p_high <- 2                                        # maximal number of items
+prob <- c(0.15, 0.10, 0.15, 0.2, 0.15, 0.10, 0.15)  # probabilities of response categories
+L <- length(prob)                                  # number of response categories
+rho <- 0.5                                         # target correlation between items
+R <- 20                                            # number of simulation runs
+seed <- 20230111                                   # seed of the random number generator
 
 # it is very easy to use parallel computing on Unix systems, but not on Windows
 if (.Platform$OS.type == "windows") {
@@ -83,7 +83,6 @@ library("dplyr")
 
 #First calculate the average correlation matrix under Pearson
 pearson = data.matrix(filter(results, Method == "Pearson")[-1:-3])
-print(pearson)
 X <- matrix(0, ncol = p, nrow = p)
 for(i in seq(1, (R*p), p)) {
   X <- X + pearson[i:(i+p-1), 1:p]
@@ -94,7 +93,7 @@ aggregated_pearson = data.frame(Items = p, Method = "Pearson", Covariance = X/R)
 # Do the same for Kendall correlation
 
 kendall = data.matrix(filter(results, Method == "Kendall")[-1:-3])
-Y <<- matrix(0, ncol = p, nrow = p)
+Y <- matrix(0, ncol = p, nrow = p)
 
 # p*p matrices therefore
 
@@ -113,7 +112,7 @@ rbind(aggregated_pearson, aggregated_kendall)
 
 
 # print message that simulation is done
-#cat(paste(Sys.time(), ": finished.\n"))
+cat(paste(Sys.time(), ": finished.\n"))
 
 
 # plot average results over the simulation runs
