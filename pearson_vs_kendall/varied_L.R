@@ -20,14 +20,14 @@ probabilty_likert <- function(bins, likert_mean = (1 + bins)/2, likert_sd = bins
 }
 
 # control parameters for data generation
-n <- 1000                               # number of observations
+n <- 50                                 # number of observations
 p <- 2                                  # number of items
 rho <- 0.8                              # target correlation between items
-R <- 100                                 # number of simulation runs
+R <- 100                                # number of simulation runs
 seed <- 20230111                        # seed of the random number generator
-l_increment= 5                          # increment for number of categories
-l_max = 1000                             # max amount of categories
-L <- seq(5, l_max, l_increment)
+l_increment= 2                          # increment for number of categories
+l_max = 30                              # max amount of categories
+L <- seq(3, l_max, l_increment)
 
 # define correlation matrix
 Rho <- matrix(rho, nrow = p, ncol = p)
@@ -46,13 +46,11 @@ cat(paste(Sys.time(), ": starting ...\n"))
 set.seed(seed)
 
 results_list_L <- parallel::mclapply(L, function(l) {
-  
   # define matrix with probabilities of response categories per item
   prob <- probabilty_likert(l)
   prob_mat <- matrix(prob, nrow = p, ncol = l, byrow = TRUE)
 
   results_list <- parallel::mclapply(seq_len(R), function(r) {
-    
     # print simulation run
     cat(paste(Sys.time(), sprintf(": L=%d\n", l), sprintf(":   run = %d\n", r)))
     
