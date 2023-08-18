@@ -1,6 +1,8 @@
 # ------------------------------------
 # Author: Andreas Alfons
 #         Erasmus University Rotterdam
+#         Floris van den Doel
+#         Erasmus University Rotterdam
 # ------------------------------------
 
 
@@ -13,7 +15,7 @@ library("ccaPP")
 # control parameters for data generation
 n <- 10000                                # number of observations
 p <- 2                                  # number of items
-prob <- c(0.05, 0.075, 0.1, 0.125, 0.3, 0.125, 0.1, 0.075, 0.05)  # probabilities of response categories
+prob <- c(0.05, 0.15, 0.4, 0.15, 0.05)  # probabilities of response categories
 L <- length(prob)                       # number of response categories
 rho_seq <- seq(0.2, 0.8, 0.1)           # target correlation between items
 R <- 100                                 # number of simulation runs
@@ -36,7 +38,7 @@ set.seed(seed)
 
 #Loop over different target correlations
 
-rho_results_list <- parallel::mclapply(rho_seq, function(rho) {
+results_list_rho <- parallel::mclapply(rho_seq, function(rho) {
 
   # define correlation matrix
   Rho <- matrix(rho, nrow = p, ncol = p)
@@ -79,17 +81,18 @@ rho_results_list <- parallel::mclapply(rho_seq, function(rho) {
 }, mc.cores = n_cores)
   
 # combine results into data frame
-rho_results <- do.call(rbind, rho_results_list)
+results_rho <- do.call(rbind, results_list_rho)
 
 # aggregate results over the simulation runs
 library("dplyr")
-aggregated <- rho_results %>%
-  group_by(Target, Method) %>%
+aggregated <- results_rho %>%
+  group_by(Category, Method) %>%
   summarize(Correlation = mean(Correlation),
             .groups = "drop")
+
 # save results to file
-file_results <- "C:/Users/flori/simulations-practice/pearson_vs_kendall/results/9cat/results_n=%d.RData"
-save(rho_results, n, p, prob,rho_seq ,seed, file = sprintf(file_results, n))
+file_results <- "Pearson_vs_kendall/results/varied_rho/results_n=%d.RData"
+save(results_rho, n, p ,prob, rho_seq, seed, file = sprintf(file_results, n))
 
 # print message that simulation is done
 cat(paste(Sys.time(), ": finished.\n"))
@@ -102,7 +105,7 @@ p <- ggplot() +
             data = aggregated)
 
 # save plot to file
-file_plot <- "C:/Users/flori/simulations-practice/pearson_vs_kendall/figures/9cat/results_n=%d.pdf"
+file_plot <- "C:/Users/flori/simulations-practice/pearson_vs_kendall/figures/varied_rho/results_n=%d.pdf"
 pdf(file = sprintf(file_plot, n), width = 5, height = 3.5)
 print(p)
 dev.off()
