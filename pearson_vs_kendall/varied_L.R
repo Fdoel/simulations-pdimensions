@@ -20,13 +20,13 @@ probabilty_likert <- function(bins, likert_mean = (1 + bins)/2, likert_sd = bins
 }
 
 # control parameters for data generation
-n <- 50                                 # number of observations
+n <- 100                               # number of observations
 p <- 2                                  # number of items
 rho <- 0.8                              # target correlation between items
 R <- 100                                # number of simulation runs
 seed <- 20230111                        # seed of the random number generator
-l_increment= 2                          # increment for number of categories
-l_max = 30                              # max amount of categories
+l_increment= 30                          # increment for number of categories
+l_max = 1000                              # max amount of categories
 L <- seq(3, l_max, l_increment)
 
 # control parameters for random respondents
@@ -80,14 +80,15 @@ results_list_L <- parallel::mclapply(L, function(l) {
     # generate clustered responses to be used for careless respondents
     n_careless_max <- sum(careless_probabilities < epsilon_max)
     careless_prob_matrix <- probabilty_likert(l, l/1.1) %>%
-      matrix(nrow = p, ncol = l, byrow = TRUE)
+    matrix(nrow = p, ncol = l, byrow = TRUE)
     data_careless <- simstudy::genData(n_careless_max) %>%
-      simstudy::genOrdCat(baseprobs = careless_prob_matrix, prefix = "item", corMatrix = Rho)
+    simstudy::genOrdCat(baseprobs = careless_prob_matrix, prefix = "item", corMatrix = Rho)
     data_careless <- as.matrix(data_careless[, -1])
     storage.mode(data_careless) <- "integer"
     
-    # In case you want to go for careless opposed to clustered data
-    # data_careless <- replicate(p, sample.int(l, n_careless_max, replace = TRUE))
+    # In case you want to go for careless opposed to clustered data uncomment following 2 lines and comment previous block
+    #n_careless_max <- sum(careless_probabilities < epsilon_max)
+    #data_careless <- replicate(p, sample.int(l, n_careless_max, replace = TRUE))
     
     
     # loop over contamination levels
@@ -150,7 +151,7 @@ aggregated <- results_L %>%
             .groups = "drop")
 
 # save results to file
-file_path_results = "Pearson_vs_kendall/results/varied_L/results"
+file_path_results = "Pearson_vs_kendall/results/varied_L/clustered/results"
 file_info = paste(
   sprintf("n=%d", n),
   sprintf("max=%d", l_max),
@@ -174,13 +175,13 @@ plot_line <- ggplot(results_L, aes(x = Categories, y = Correlation, color = Meth
   geom_smooth(aes(linetype = factor(Epsilon)))
 
 # save box plot to file
-file_path_plot = "pearson_vs_kendall/figures/varied_L/results"
+file_path_plot = "pearson_vs_kendall/figures/varied_L/clustered/results"
 pdf(file = paste(file_path_plot, file_info, "box", ".pdf", sep = ""), width = 5, height = 3.5)
 print(plot_box)
 dev.off()
 
 # save line plot to file
-file_path_plot = "pearson_vs_kendall/figures/varied_L/results"
+file_path_plot = "pearson_vs_kendall/figures/varied_L/clustered/results"
 pdf(file = paste(file_path_plot, file_info, "line", ".pdf", sep = ""), width = 5, height = 3.5)
 print(plot_line)
 dev.off()
