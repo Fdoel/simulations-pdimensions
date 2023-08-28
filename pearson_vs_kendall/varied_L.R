@@ -10,6 +10,7 @@
 library("parallel")
 library("simstudy")
 library("ccaPP")
+source("functions/block_correlation_matrix_fixed.R")
 
 # Function to generate base probabilities with multiple categories
 probabilty_likert <- function(bins, likert_mean = (1 + bins)/2, likert_sd = bins/4) {
@@ -20,13 +21,15 @@ probabilty_likert <- function(bins, likert_mean = (1 + bins)/2, likert_sd = bins
 }
 
 # control parameters for data generation
-n <- 100                               # number of observations
-p <- 2                                  # number of items
-rho <- 0.8                              # target correlation between items
+n <- 50                              # number of observations
+scales <- 1                             # number of scales
+p <- 5                                  # number of items per scale
+rho_W <- 0.8                            # target correlation between items within scales
+rho_B <- 0.4                            # target correlation between scales
 R <- 100                                # number of simulation runs
 seed <- 20230111                        # seed of the random number generator
-l_increment= 30                          # increment for number of categories
-l_max = 1000                              # max amount of categories
+l_increment= 20                          # increment for number of categories
+l_max = 1003                               # max amount of categories
 L <- seq(3, l_max, l_increment)
 
 # control parameters for random respondents
@@ -34,8 +37,7 @@ epsilons <- seq(0, 0.3, by = 0.3)
 epsilon_max <- max(epsilons)
 
 # define correlation matrix
-Rho <- matrix(rho, nrow = p, ncol = p)
-diag(Rho) <- 1
+Rho <- cor_mat_block(scales, p, rho_W, rho_B)
 
 # it is very easy to use parallel computing on Unix systems, but not on Windows
 if (.Platform$OS.type == "windows") {
@@ -52,12 +54,12 @@ set.seed(seed)
 results_list_L <- parallel::mclapply(L, function(l) {
   # define matrix with probabilities of response categories per item
   prob <- probabilty_likert(l)
-  prob_mat <- matrix(prob, nrow = p, ncol = l, byrow = TRUE)
-
+  prob_mat <- matrix(prob, nrow = p*scales, ncol = l, byrow = TRUE)
+  
   results_list <- parallel::mclapply(seq_len(R), function(r) {
     # print simulation run
     cat(paste(Sys.time(), sprintf(": L=%d\n", l), sprintf(":   run = %d\n", r)))
-
+    
     # initialize data table
     initial <- simstudy::genData(n)
     # generate correlated rating-scale items
@@ -78,17 +80,17 @@ results_list_L <- parallel::mclapply(L, function(l) {
     careless_probabilities <- careless_probabilities[order]
     
     # generate clustered responses to be used for careless respondents
-    n_careless_max <- sum(careless_probabilities < epsilon_max)
-    careless_prob_matrix <- probabilty_likert(l, l/1.1) %>%
-    matrix(nrow = p, ncol = l, byrow = TRUE)
-    data_careless <- simstudy::genData(n_careless_max) %>%
-    simstudy::genOrdCat(baseprobs = careless_prob_matrix, prefix = "item", corMatrix = Rho)
-    data_careless <- as.matrix(data_careless[, -1])
-    storage.mode(data_careless) <- "integer"
+    #n_careless_max <- sum(careless_probabilities < epsilon_max)
+    #careless_prob_matrix <- probabilty_likert(l, l/1.1) %>%
+    #  matrix(nrow = p*scales, ncol = l, byrow = TRUE)
+    #data_careless <- simstudy::genData(n_careless_max) %>%
+    #  simstudy::genOrdCat(baseprobs = careless_prob_matrix, prefix = "item", corMatrix = Rho)
+    #data_careless <- as.matrix(data_careless[, -1])
+    #storage.mode(data_careless) <- "integer"
     
     # In case you want to go for careless opposed to clustered data uncomment following 2 lines and comment previous block
-    #n_careless_max <- sum(careless_probabilities < epsilon_max)
-    #data_careless <- replicate(p, sample.int(l, n_careless_max, replace = TRUE))
+    n_careless_max <- sum(careless_probabilities < epsilon_max)
+    data_careless <- replicate(p, sample.int(l, n_careless_max, replace = TRUE))
     
     
     # loop over contamination levels
@@ -107,9 +109,9 @@ results_list_L <- parallel::mclapply(L, function(l) {
       df_pearson <- tryCatch({
         pearson <- ccaPP::corPearson(data[, 1], data[, 2])
         data.frame(Run = r, Epsilon = epsilon, Categories = l, Method = "Pearson",
-                  Correlation = pearson)
+                   Correlation = pearson)
       }, error = function(e) NULL, warning = function(w) NULL)
-    
+      
       # compute Kendall correlation
       df_kendall <- tryCatch({
         kendall <- ccaPP::corKendall(data[, 1], data[, 2])
@@ -127,7 +129,7 @@ results_list_L <- parallel::mclapply(L, function(l) {
       
       # combine results
       rbind(df_pearson, df_kendall, df_transformed_kendall)
-    
+      
     })
     
     # combine results from current simulation run into data frame
@@ -151,14 +153,14 @@ aggregated <- results_L %>%
             .groups = "drop")
 
 # save results to file
-file_path_results = "Pearson_vs_kendall/results/varied_L/clustered/results"
+file_path_results = "Pearson_vs_kendall/results/summary/careless/asymptotic/"
 file_info = paste(
   sprintf("n=%d", n),
   sprintf("max=%d", l_max),
   sprintf("increment=%d", l_increment),
   sep = "_")
 
-save(results_L, n, p, rho, l_max, l_increment, seed, file = paste(file_path_results, file_info, ".RData", sep = ""))
+save(results_L, n, p, rho_W, rho_B, l_max, l_increment, seed, file = paste(file_path_results, file_info, ".RData", sep = ""))
 
 # print message that simulation is done
 cat(paste(Sys.time(), ": finished.\n"))
@@ -168,21 +170,21 @@ cat(paste(Sys.time(), ": finished.\n"))
 library("ggplot2")
 plot_box <-  dplyr::filter(results_L, near(Epsilon, 0.0)) %>%
   ggplot(aes(x = factor(Categories), y = Correlation, color = Method)) +
-    geom_boxplot()
+  geom_boxplot()
 
 
 plot_line <- ggplot(results_L, aes(x = Categories, y = Correlation, color = Method)) +
   geom_smooth(aes(linetype = factor(Epsilon)))
 
 # save box plot to file
-file_path_plot = "pearson_vs_kendall/figures/varied_L/clustered/results"
+file_path_plot = "pearson_vs_kendall/figures/summary/careless/asymptotic/"
 pdf(file = paste(file_path_plot, file_info, "box", ".pdf", sep = ""), width = 5, height = 3.5)
 print(plot_box)
 dev.off()
 
 # save line plot to file
-file_path_plot = "pearson_vs_kendall/figures/varied_L/clustered/results"
 pdf(file = paste(file_path_plot, file_info, "line", ".pdf", sep = ""), width = 5, height = 3.5)
 print(plot_line)
 dev.off()
 print(plot_line)
+

@@ -116,20 +116,20 @@ cat(paste(Sys.time(), ": finished.\n"))
 
 
 # plot average results over the simulation runs
-#library("ggplot2")
-#p <- ggplot() +
-#  geom_line(aes(x = p, y = Correlation, color = Method),
-#            data = aggregated)
+library("ggplot2")
+p <- ggplot() +
+  geom_line(aes(x = p, y = Correlation, color = Method),
+            data = aggregated)
 
 # save plot to file
-#file_plot <- "C:/Users/flori/simulations-practice/pearson_vs_kendall/results/results_n=%d.pdf"
-#pdf(file = sprintf(file_plot, n), width = 5, height = 3.5)
-#print(p)
+file_plot <- "Pearson_vs_kendall/figures/summary/p_differ/results_p=%d.pdf"
+pdf(file = sprintf(file_plot, p), width = 5, height = 3.5)
+print(p)
 
 
 
 # save results to file
-file_results <- "C:/Users/flori/simulations-practice/pearson_vs_kendall/results/results_n=%d.RData"
+file_results <- "pearson_vs_kendall/results/summary/p_differ/results_p=%d.RData"
 save(results, n, p, prob, rho, seed, file = sprintf(file_results, n))
 
 dev.off()

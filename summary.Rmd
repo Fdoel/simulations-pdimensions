@@ -1,0 +1,224 @@
+---
+title: "Kendall vs. Pearson correlation in reating scale data"
+output: html_document
+date: "2023-08-27"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+
+library(tidyverse)
+
+```
+
+## Kendall vs. Pearson correlation in reating scale data ##
+
+This text will provide a summary of the comparison between Kendall's tau and Pearson correlation in rating scale data. Several different settings are considered. The correlation coefficients found in the tables and graphs only consider the measure between the first and second item. This can be changed to look at the covariance matrices, however this is hard to visualise.
+
+### Varied amount of items ###
+
+Varying the amount of items seems to have little effect on the correlation coefficient, which seems intuitive as we are only looking at the correlation between the first and second item.
+
+For each of the following plot, only the amount of items differs. The other parameters are as follows
+number of observations = 1000, amount of runs = 100
+
+```{r, echo=FALSE, message=FALSE, out.width = "33%"}
+p_seq = c(2, 5, 10)
+for(i in p_seq) {
+  sprintf("pearson_vs_kendall/results/summary/p_differ/results_p=%d", i) %>%
+  paste(".RData", sep = "") %>%
+  load(.GlobalEnv)
+  p <-ggplot(results_rho ,aes(x = Target, y = Correlation, color = Method)) +
+    geom_smooth() +
+    ggtitle(paste("P = ", i))
+  print(p)
+}
+```
+
+
+### Varied amount of categories ###
+
+When we add more categories, we expect the rating scale data to slowly resemble continuous data, and thus for the average correlation per method to converge. 
+
+For this the following function is used to generate the base probabilities.
+
+```{r}
+probabilty_likert <- function(bins, likert_mean = (1 + bins)/2, likert_sd = bins/4) {
+  intervals = c(seq(1.5, bins - 0.5), Inf)
+  x <- pnorm(intervals, mean = likert_mean, sd = likert_sd)
+  y <- dplyr::lag(x, default = 0)
+  x - y
+}
+```
+
+The probabilties are based upon a normally distributed latent variable, this means that as we have a limited number of categories, base probabilites are not normally distributed.
+
+We indeed see that the estimated correlation tends towards the target correlation for categories going to 1000.
+
+```{r, echo=FALSE, message=FALSE}
+load("pearson_vs_kendall/results/summary/careless/asymptotic/n=1000_max=1003_increment=20.RData")
+plot_line <-  dplyr::filter(results_L, near(Epsilon, 0.0)) %>%
+  ggplot(aes(x = Categories, y = Correlation, color = Method)) +
+  geom_smooth() +
+  ggtitle("n = 1000, target rho = 0.8")
+print(plot_line)
+```
+
+Transformed Kendall in this case means the Fischer consistent version of Kendall's tau.
+
+$\tilde{R}_K(H)=\sin \left(\frac{1}{2} \pi R_K(H)\right)$
+
+Where $\tilde{R}_K(H)$ is used in the plot.
+
+## Contaminated data ##
+
+More intresting is when we look at contaminated data. When we take 30% ($\epsilon = 0.3$) of our dataand replace them with either careless respondents, who have an equal probability for choosing each catogery on each question, and "agreers", who have a tendency to respond higher in the Likert scale. In the function described earlier 'careless_prob_matrix <- probabilty_likert(l, l/1.1)' where l is the amount of categories.
+
+### Asymptotic behaviour ###
+
+First we'll take a look at the asymptotic behaviour of the contaminated data.
+
+```{r, echo=FALSE, message=FALSE}
+# Load and store all specific dataframes
+load("pearson_vs_kendall/results/summary/careless/asymptotic/n=1000_max=1003_increment=20.RData")
+results_n1000 <- results_L %>%
+  mutate(Observations = 1000)
+
+load("pearson_vs_kendall/results/summary/careless/asymptotic/n=100_max=1003_increment=20.RData")
+results_n100 <- results_L %>%
+  mutate(Observations = 100)
+
+load("pearson_vs_kendall/results/summary/careless/asymptotic/n=50_max=1003_increment=20.RData")
+results_n50 <- results_L %>%
+  mutate(Observations = 50)
+
+# Create large df in a not so nicely coded way
+
+results_n1000_regular <- dplyr::filter(results_n1000, near(Epsilon, 0.0))%>%
+  mutate(Type = "regular")
+results_n1000_careless <- dplyr::filter(results_n1000, near(Epsilon, 0.3)) %>%
+  mutate(Type = "careless")
+
+results_n100_regular <- dplyr::filter(results_n100, near(Epsilon, 0.0))%>%
+  mutate(Type = "regular")
+results_n100_careless <- dplyr::filter(results_n100, near(Epsilon, 0.3)) %>%
+  mutate(Type = "careless")
+
+results_n50_regular <- dplyr::filter(results_n50, near(Epsilon, 0.0))%>%
+  mutate(Type = "regular")
+results_n50_careless <- dplyr::filter(results_n50, near(Epsilon, 0.3)) %>%
+  mutate(Type = "careless")
+
+# Get the agreer data too
+
+load("pearson_vs_kendall/results/summary/agree/asymptotic/asymptoticn=1000_max=1000_increment=20.RData")
+results_n1000_agree <- dplyr::filter(results_L, near(Epsilon, 0.3)) %>%
+  mutate(Observations = 1000, Type = "agree")
+
+load("pearson_vs_kendall/results/summary/agree/asymptotic/asymptoticn=100_max=1000_increment=20.RData")
+results_n100_agree <- dplyr::filter(results_L, near(Epsilon, 0.3)) %>%
+  mutate(Observations = 100, Type = "agree")
+
+load("pearson_vs_kendall/results/summary/agree/asymptotic/asymptoticn=50_max=1000_increment=20.RData")
+results_n50_agree <- dplyr::filter(results_L, near(Epsilon, 0.3)) %>%
+  mutate(Observations = 50, Type = "agree")
+
+df_asymptotic <- rbind(
+  results_n1000_careless,
+  results_n1000_regular,
+  results_n1000_agree,
+  results_n100_careless,
+  results_n100_regular,
+  results_n100_agree,
+  results_n50_careless,
+  results_n50_regular,
+  results_n50_agree)
+
+plot_grid <- 
+  ggplot(df_asymptotic, aes(x = Categories, y = Correlation, color = Method)) +
+      geom_smooth() +
+      facet_grid(factor(Type) ~ factor(Observations))
+      
+  print(plot_grid)
+```
+
+Behaviour towards 1000 categories behaves as expected. Transformed Kendall and Pearson tend towards the same value. However, while this is useful for validation no one is filling in a 1000 category survey.
+
+As we can see, especially for lower values Transormed Kendall's correlation is a lot closer to the correlation for large values, suggesting there is some usefulness.
+
+### 3 to 11 catogeries ###
+
+The real usefulness of the comaparison between the different methods of measuring correlation lies within regular survey values, like  3 to a maximum of 11.
+
+Lets take a look at that data.
+
+```{r, echo=FALSE, out.width="200%", out.height="150%"}
+# Load and store all specific dataframes
+load("pearson_vs_kendall/results/summary/careless/3to11/n=1000_max=11_increment=2.RData")
+results_n1000 <- results_L %>%
+  mutate(Observations = 1000)
+
+load("pearson_vs_kendall/results/summary/careless/3to11/n=100_max=11_increment=2.RData")
+results_n100 <- results_L %>%
+  mutate(Observations = 100)
+
+load("pearson_vs_kendall/results/summary/careless/3to11/n=50_max=11_increment=2.RData")
+results_n50 <- results_L %>%
+  mutate(Observations = 50)
+
+# Create large df in a not so nicely coded way
+
+results_n1000_regular <- dplyr::filter(results_n1000, near(Epsilon, 0.0))%>%
+  mutate(Type = "regular")
+results_n1000_careless <- dplyr::filter(results_n1000, near(Epsilon, 0.3)) %>%
+  mutate(Type = "careless")
+
+results_n100_regular <- dplyr::filter(results_n100, near(Epsilon, 0.0))%>%
+  mutate(Type = "regular")
+results_n100_careless <- dplyr::filter(results_n100, near(Epsilon, 0.3)) %>%
+  mutate(Type = "careless")
+
+results_n50_regular <- dplyr::filter(results_n50, near(Epsilon, 0.0))%>%
+  mutate(Type = "regular")
+results_n50_careless <- dplyr::filter(results_n50, near(Epsilon, 0.3)) %>%
+  mutate(Type = "careless")
+
+# Get the agreer data too
+
+load("pearson_vs_kendall/results/summary/agree/3to11/n=1000_max=11_increment=2.RData")
+results_n1000_agree <- dplyr::filter(results_L, near(Epsilon, 0.3)) %>%
+  mutate(Observations = 1000, Type = "agree")
+
+load("pearson_vs_kendall/results/summary/agree/3to11/n=100_max=11_increment=2.RData")
+results_n100_agree <- dplyr::filter(results_L, near(Epsilon, 0.3)) %>%
+  mutate(Observations = 100, Type = "agree")
+
+load("pearson_vs_kendall/results/summary/agree/3to11/n=50_max=11_increment=2.RData")
+results_n50_agree <- dplyr::filter(results_L, near(Epsilon, 0.3)) %>%
+  mutate(Observations = 50, Type = "agree")
+
+df_small <- rbind(
+  results_n1000_careless,
+  results_n1000_regular,
+  results_n1000_agree,
+  results_n100_careless,
+  results_n100_regular,
+  results_n100_agree,
+  results_n50_careless,
+  results_n50_regular,
+  results_n50_agree)
+plot_grid <-
+    ggplot(df_small, aes(y = Correlation, color = Method)) +
+      geom_boxplot(aes(x = factor(Categories))) +
+      facet_grid(factor(Type) ~ factor(Observations))
+      
+  print(plot_grid)
+```
+
+
+
+
+

@@ -13,8 +13,8 @@ library("ccaPP")
 
 
 # control parameters for data generation
-n <- 10000                                # number of observations
-p <- 2                                  # number of items
+n <- 1000                                # number of observations
+p <- 5                                  # number of items
 prob <- c(0.05, 0.15, 0.4, 0.15, 0.05)  # probabilities of response categories
 L <- length(prob)                       # number of response categories
 rho_seq <- seq(0.2, 0.8, 0.1)           # target correlation between items
@@ -83,29 +83,21 @@ results_list_rho <- parallel::mclapply(rho_seq, function(rho) {
 # combine results into data frame
 results_rho <- do.call(rbind, results_list_rho)
 
-# aggregate results over the simulation runs
-library("dplyr")
-aggregated <- results_rho %>%
-  group_by(Category, Method) %>%
-  summarize(Correlation = mean(Correlation),
-            .groups = "drop")
-
 # save results to file
-file_results <- "Pearson_vs_kendall/results/varied_rho/results_n=%d.RData"
-save(results_rho, n, p ,prob, rho_seq, seed, file = sprintf(file_results, n))
+file_results <- "Pearson_vs_kendall/results/summary/p_differ/results_p=%d.RData"
+save(results_rho, n, p ,prob, rho_seq, seed, file = sprintf(file_results, p))
 
 # print message that simulation is done
 cat(paste(Sys.time(), ": finished.\n"))
-
 
 # plot average results over the simulation runs
 library("ggplot2")
 p <- ggplot() +
   geom_line(aes(x = Target, y = Correlation, color = Method),
-            data = aggregated)
+            data = results_rho)
 
 # save plot to file
-file_plot <- "C:/Users/flori/simulations-practice/pearson_vs_kendall/figures/varied_rho/results_n=%d.pdf"
-pdf(file = sprintf(file_plot, n), width = 5, height = 3.5)
+file_plot <- "pearson_vs_kendall/figures/summary/p_differ/results_p=%d.pdf"
+pdf(file = sprintf(file_plot, p), width = 5, height = 3.5)
 print(p)
 dev.off()
