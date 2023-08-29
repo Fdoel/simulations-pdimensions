@@ -68,3 +68,20 @@ cor_mat_block <- function(num_scales, scale_size, rho_W, rho_B) {
   nearPD_object$mat
 
 }
+
+#Function to calculate average correlation matrix
+#' @param df dataframe containing correlationmatrices with key
+#' @param method method to extract form df
+#' @param p amount of variables per scale
+#' @param q amount of items in the key
+#' @param scales the amount of scales in the df
+#' 
+#' @return Average correlation matrix.
+
+Rho_avergae <- function(df, method, p, q, scales) {
+  matrices_method = data.matrix(filter(df, Method == method)[-1:-q]) # Extract matrices for chosen method and drop key
+  X <- matrix(0, ncol = p*scales, nrow = p*scales)
+  for(i in seq(1, (R*p*scales), p*scales)) {
+    X <- X + matrices_method[i:(i+p-1), 1:p]
+  }
+}

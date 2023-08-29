@@ -217,8 +217,10 @@ plot_grid <-
       
   print(plot_grid)
 ```
+Especially at lower amounts of categories Transformed Kendall's estimate is a lot closer to the target correlation.
 
+### Multiple Constructs ###
 
-
+When introducing mulitple constructs, the correlation estimate between p1 and p2 should not change. We can contruct the average correlation matrix using the following function.
 
 
