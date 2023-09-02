@@ -1,6 +1,8 @@
 # ------------------------------------
 # Author: Andreas Alfons
 #         Erasmus University Rotterdam
+#         Floris van den Doel
+#         Erasmus University Rotterdam
 # ------------------------------------
 
 
@@ -12,14 +14,14 @@ source("functions/block_correlation_matrix_fixed.R")
 
 
 # control parameters for data generation
-n <- 1000                               # number of observations
+n <- 100                               # number of observations
 num_scales <- 4                         # number of scales
-p <- 2                                  # number of items per scale
+p <- 5                                  # number of items per scale
 prob <- c(0.05, 0.25, 0.4, 0.25, 0.05)  # probabilities of response categories
 L <- length(prob)                       # number of response categories
 rho_b <- 0.4                            # target correlation between scales
-rho_w_seq <- seq(0.4, 0.8, 0.1)             # target correlation within scales
-R <- 100                                # number of simulation runs
+rho_w_seq <- seq(0.4, 0.8, 0.1)        # target correlation within scales
+R <- 10                                # number of simulation runs
 seed <- 20230111                        # seed of the random number generator
 
 # define matrix with probabilities of response categories per item
@@ -133,8 +135,8 @@ results_list_rho <- parallel::mclapply(rho_w_seq, function(rho_w) {
 results_rho <-do.call(rbind, results_list_rho)
 
 # save results to file
-file_results <- "simulations_single_script/results/results_n=%d.RData"
-save(results, n, p, prob, rho, seed, file = sprintf(file_results, n))
+file_results <- "pearson_vs_kendall/results/Qn/Rhow/results_n=%d-scales=%d-p=%d.RData"
+save(results_rho, n, p, num_scales, prob, rho_w_seq, rho_b, seed, file = sprintf(file_results, n, num_scales, p))
 
 # print message that simulation is done
 cat(paste(Sys.time(), ": finished.\n"))
@@ -142,19 +144,20 @@ cat(paste(Sys.time(), ": finished.\n"))
 
 # aggregate results over the simulation runs
 library("dplyr")
-aggregated <- results %>%
-  group_by(epsilon, Method) %>%
-  summarize(Correlation = mean(Correlation),
+aggregated <- results_rho %>%
+  group_by(epsilon, Method, rho_w) %>%
+  summarize(Norm = mean(Norm),
             .groups = "drop")
 
 # plot average results over the simulation runs
 library("ggplot2")
-p <- ggplot() +
-  geom_line(aes(x = epsilon, y = Correlation, color = Method),
-            data = aggregated)
+p_line <- ggplot(aggregated, aes(x = rho_w, y = Norm, color = Method)) +
+  geom_line() +
+  facet_wrap(~ factor(epsilon), nrow = 1)
 
 # save plot to file
-file_plot <- "simulations_single_script/figures/results_n=%d.pdf"
-pdf(file = sprintf(file_plot, n), width = 5, height = 3.5)
+file_plot <- "pearson_vs_kendall/figures/Qn/Rhow/results_n=%d-scales=%d-p=%d.pdf"
+pdf(file = sprintf(file_plot, n, num_scales, p), width = 5, height = 3.5)
 print(p)
 dev.off()
+

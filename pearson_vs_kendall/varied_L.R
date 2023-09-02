@@ -30,7 +30,7 @@ rho_B <- 0.4                            # target correlation between scales
 R <- 100                                # number of simulation runs
 seed <- 20230111                        # seed of the random number generator
 l_increment= 2                         # increment for number of categories
-l_max = 11                            # max amount of categories
+l_max = 102                            # max amount of categories
 L <- seq(3, l_max, l_increment)
 
 # control parameters for random respondents
