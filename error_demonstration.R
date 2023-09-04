@@ -15,16 +15,16 @@ source("functions/probabilities.R")
 
 
 # control parameters for data generation
-n <- 200                               # number of observations
+n <- 1000                               # number of observations
 num_scales <- 4                         # number of scales
 p <- 5                                  # number of items per scale
 prob <- c(0.05, 0.25, 0.4, 0.25, 0.05)  # probabilities of response categories
 L <- length(prob)                       # number of response categories
 rho_b <- 0.4                            # target correlation between scales
 rho_w_seq <- seq(0.4, 0.8, 0.1)        # target correlation within scales
-R <- 20                                # number of simulation runs
+R <- 10                                # number of simulation runs
 seed <- 20230111                      # seed of the random number generator
-scale_estimator <- "Qn11.5"          # type of scale estimator used
+scale_estimator <- "IQR"          # type of scale estimator used
 true_sd <- likert_sd(prob)    # get the true variance of each variable
 
 # define matrix with probabilities of response categories per item
@@ -101,41 +101,10 @@ results_list_rho <- parallel::mclapply(rho_w_seq, function(rho_w) {
       # Create a scale matrix with variance on the diagonal
       scale_estimate = matrix(0, nrow = p*num_scales, ncol = p*num_scales)
       for (i in 1:(p*num_scales)) {
-        scale_estimate[i, i] <- 
-          #Change this line to preffered scale estimator
-          robustbase::Qn(data[, i], k = choose(n,2)%/%1.5)
+        scale_estimate[i, i] <- robustbase::Qn(data[, i])
       }
       
-      # compute Frobenius norm of the estimation error matrix for Pearson
-      df_pearson_norm <- tryCatch({
-        if(det(scale_estimate) == 0) {
-          NULL
-        } else {
-        # get the transformed Kendall matrix and multiply it with scale to get the scatter matrix
-        pearson_matrix <- scale_estimate %*% cor(data, method = "pearson") %*% scale_estimate
-        # get the Frobenius norm of the error matrix
-        pearson_norm <- norm(Sigma - pearson_matrix, type = "F")
-        data.frame(Run = r, rho_w = rho_w, epsilon = epsilon, Method = "Pearson",
-                   Norm = pearson_norm)
-        }
-      }, error = function(e) NULL, warning = function(w) NULL)
-      
-      # compute Frobenius norm of the estimation error matrix for Pearson
-      df_trans_kendall_norm <- tryCatch({
-        if(det(scale_estimate) == 0) {
-          NULL
-        } else {
-        # get the transformed Kendall matrix and multiply it with scale to get the scatter matrix
-        kendall_matrix <- scale_estimate %*% sin(pi*0.5*cor(data, method = "kendall")) %*% scale_estimate
-        # get the Frobenius norm of the error matrix
-        kendall_norm <- norm(Sigma - kendall_matrix, type = "F")
-        data.frame(Run = r, rho_w = rho_w, epsilon = epsilon, Method = "Transformed Kendall",
-                   Norm = kendall_norm)
-        }
-      }, error = function(e) NULL, warning = function(w) NULL)
-      
-      # combine results
-      rbind(df_pearson_norm, df_trans_kendall_norm)
+      scale_estimate
       
     })
     
@@ -151,37 +120,3 @@ results_list_rho <- parallel::mclapply(rho_w_seq, function(rho_w) {
 
 # combine results into dataframe
 results_rho <-do.call(rbind, results_list_rho)
-
-# save results to file
-file_results <- "pearson_vs_kendall/results/Qn/Rhow/results_n=%d-scales=%d-p=%d-est=%s.RData"
-save(results_rho, n, p, num_scales, prob, rho_w_seq, rho_b, seed, file = sprintf(file_results, n, num_scales, p, scale_estimator))
-
-# print message that simulation is done
-cat(paste(Sys.time(), ": finished.\n"))
-
-
-# aggregate results over the simulation runs
-library("dplyr")
-aggregated <- results_rho %>%
-  group_by(epsilon, Method, rho_w) %>%
-  summarize(Norm = mean(Norm),
-            .groups = "drop")
-
-# plot average results over the simulation runs
-library("ggplot2")
-p_line <- ggplot(aggregated, aes(x = rho_w, y = Norm, color = Method)) +
-  geom_line() +
-  facet_wrap(~ factor(epsilon), nrow = 1) +
-  
-  # add some cosmetic changes
-  scale_x_continuous(n.breaks = 3) +
-  theme_minimal() +
-  theme(panel.spacing=unit(2,"lines")) +
-  xlab("Correlation between items in scale") +
-  labs(title = sprintf("Frobesius norm of variance error matrix using %s", scale_estimator), subtitle = sprintf("n =% d correlation between scales = %f", n, rho_b), caption = sprintf("number of scales = %d, number of items per scale = %d", num_scales, p))
-
-# save plot to file
-file_plot <- "pearson_vs_kendall/figures/Qn/Rhow/results_n=%d-scales=%d-p=%d-estimator=%s.pdf"
-pdf(file = sprintf(file_plot, n, num_scales, p, scale_estimator), width = 8, height = 5)
-print(p_line)
-dev.off()
