@@ -15,7 +15,7 @@ source("functions/probabilities.R")
 
 
 # control parameters for data generation
-n <- 100                               # number of observations
+n <- 1000                               # number of observations
 num_scales <- 4                         # number of scales
 p <- 5                                  # number of items per scale
 prob <- c(0.05, 0.25, 0.4, 0.25, 0.05)  # probabilities of response categories
@@ -23,8 +23,8 @@ L <- length(prob)                       # number of response categories
 rho_b <- 0.4                            # target correlation between scales
 rho_w_seq <- seq(0.4, 0.8, 0.1)        # target correlation within scales
 R <- 10                                # number of simulation runs
-seed <- 20230111                        # seed of the random number generator
-scale_estimator <- "MAD"              # type of scale estimator used
+seed <- 20230111                      # seed of the random number generator
+scale_estimator <- "IQR"          # type of scale estimator used
 true_sd <- likert_sd(prob)    # get the true variance of each variable
 
 # define matrix with probabilities of response categories per item
@@ -101,7 +101,7 @@ results_list_rho <- parallel::mclapply(rho_w_seq, function(rho_w) {
       # Create a scale matrix with variance on the diagonal
       scale_estimate = matrix(0, nrow = p*num_scales, ncol = p*num_scales)
       for (i in 1:(p*num_scales)) {
-        scale_estimate[i, i] <- mad(data[, i])
+        scale_estimate[i, i] <- IQR(data[, i])
       }
       
       # compute Frobenius norm of the estimation error matrix for Pearson
@@ -161,10 +161,17 @@ aggregated <- results_rho %>%
 library("ggplot2")
 p_line <- ggplot(aggregated, aes(x = rho_w, y = Norm, color = Method)) +
   geom_line() +
-  facet_wrap(~ factor(epsilon), nrow = 1)
+  facet_wrap(~ factor(epsilon), nrow = 1) +
+  
+  # add some cosmetic changes
+  scale_x_continuous(n.breaks = 3) +
+  theme_minimal() +
+  theme(panel.spacing=unit(2,"lines")) +
+  xlab("Correlation between items in scale") +
+  labs(title = sprintf("Frobesius norm of variance error matrix using %s", scale_estimator), subtitle = sprintf("n =% d correlation between scales = %f", n, rho_b), caption = sprintf("number of scales = %d, number of items per scale = %d", num_scales, p))
 
 # save plot to file
 file_plot <- "pearson_vs_kendall/figures/Qn/Rhow/results_n=%d-scales=%d-p=%d-estimator=%s.pdf"
-pdf(file = sprintf(file_plot, n, num_scales, p, scale_estimator), width = 5, height = 3.5)
+pdf(file = sprintf(file_plot, n, num_scales, p, scale_estimator), width = 8, height = 5)
 print(p_line)
 dev.off()
