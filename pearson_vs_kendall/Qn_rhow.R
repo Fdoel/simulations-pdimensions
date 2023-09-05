@@ -15,17 +15,17 @@ source("functions/probabilities.R")
 
 
 # control parameters for data generation
-n <- 200                               # number of observations
+n <- 100                                # number of observations
 num_scales <- 4                         # number of scales
 p <- 5                                  # number of items per scale
-prob <- c(0.05, 0.25, 0.4, 0.25, 0.05)  # probabilities of response categories
+prob = c(0.05, 0.15, 0.4, 0.15, 0.05)   # get base probabilities
 L <- length(prob)                       # number of response categories
 rho_b <- 0.4                            # target correlation between scales
-rho_w_seq <- seq(0.4, 0.8, 0.1)        # target correlation within scales
-R <- 20                                # number of simulation runs
-seed <- 20230111                      # seed of the random number generator
-scale_estimator <- "Qn11.5"          # type of scale estimator used
-true_sd <- likert_sd(prob)    # get the true variance of each variable
+rho_w_seq <- seq(0.4, 0.8, 0.1)         # target correlation within scales
+R <- 50                                 # number of simulation runs
+seed <- 20230111                        # seed of the random number generator
+scale_estimator <- "MAD"                 # type of scale estimator used
+true_sd <- likert_sd(prob)              # get the true variance of each variable
 
 # define matrix with probabilities of response categories per item
 prob_mat <- matrix(prob, nrow = num_scales*p, ncol = L, byrow = TRUE)
@@ -103,9 +103,9 @@ results_list_rho <- parallel::mclapply(rho_w_seq, function(rho_w) {
       for (i in 1:(p*num_scales)) {
         scale_estimate[i, i] <- 
           #Change this line to preffered scale estimator
-          robustbase::Qn(data[, i], k = choose(n,2)%/%1.5)
+          mad(data[, i])
       }
-      
+
       # compute Frobenius norm of the estimation error matrix for Pearson
       df_pearson_norm <- tryCatch({
         if(det(scale_estimate) == 0) {
@@ -152,9 +152,15 @@ results_list_rho <- parallel::mclapply(rho_w_seq, function(rho_w) {
 # combine results into dataframe
 results_rho <-do.call(rbind, results_list_rho)
 
+# Get the amount of missing observations
+
+total_estimators_possible <- R*length(rho_w_seq)*length(epsilons)
+total_estimators_actual <- nrow(results_rho)/2
+useless_count <- total_estimators_possible - total_estimators_actual
+
 # save results to file
 file_results <- "pearson_vs_kendall/results/Qn/Rhow/results_n=%d-scales=%d-p=%d-est=%s.RData"
-save(results_rho, n, p, num_scales, prob, rho_w_seq, rho_b, seed, file = sprintf(file_results, n, num_scales, p, scale_estimator))
+save(results_rho, n, p, num_scales, prob, rho_w_seq, rho_b, useless_count, seed, file = sprintf(file_results, n, num_scales, p, scale_estimator))
 
 # print message that simulation is done
 cat(paste(Sys.time(), ": finished.\n"))
@@ -178,7 +184,9 @@ p_line <- ggplot(aggregated, aes(x = rho_w, y = Norm, color = Method)) +
   theme_minimal() +
   theme(panel.spacing=unit(2,"lines")) +
   xlab("Correlation between items in scale") +
-  labs(title = sprintf("Frobesius norm of variance error matrix using %s", scale_estimator), subtitle = sprintf("n =% d correlation between scales = %f", n, rho_b), caption = sprintf("number of scales = %d, number of items per scale = %d", num_scales, p))
+  labs(title = sprintf("Frobesius norm of variance error matrix using %s", scale_estimator),
+       subtitle = sprintf("n =% d correlation between scales = %f", n, rho_b),
+       caption = sprintf("number of scales = %d, number of items per scale = %d, possible runs = %d, missing runs = %f", num_scales, p, total_estimators_possible, useless_count))
 
 # save plot to file
 file_plot <- "pearson_vs_kendall/figures/Qn/Rhow/results_n=%d-scales=%d-p=%d-estimator=%s.pdf"
