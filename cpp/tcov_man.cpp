@@ -5,7 +5,7 @@ using namespace arma;
 using namespace Rcpp;
 
 // [[Rcpp::export]]
-arma::mat tcov_cpp(const arma::mat& x, const double& beta) {
+arma::mat tcov_man_cpp(const arma::mat& x, const double& beta) {
 
   // initializations
   const arma::uword n = x.n_rows;

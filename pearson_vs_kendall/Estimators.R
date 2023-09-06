@@ -15,7 +15,8 @@ library('RcppArmadillo')
 source("functions/block_correlation_matrix_fixed.R")
 source("functions/probabilities.R")
 source("functions/Pn.R")
-sourceCpp("cpp/tcov.cpp")
+sourceCpp("cpp/tcov_man.cpp")
+sourceCpp("cpp/tcov_regular.cpp")
 
 
 # control parameters for data generation
@@ -118,19 +119,37 @@ results_list_scale <- parallel::mclapply(scales, function(num_scales) {
             Pn(data[, i])
         }
         
-        # compute Frobenius norm of the estimation error matrix for tcov
-        df_tcov_norm <- tryCatch({
+        # compute Frobenius norm of the estimation error matrix for the regular tcov
+        df_tcov_regular_norm <- tryCatch({
           # get the transformed Kendall matrix and multiply it with scale to get the scatter matrix
-          tcov_matrix <- tcov_cpp(data, 2)
+          tcov_regular_matrix <- tcov_regular_cpp(data, 2)
           # get the Frobenius norm of the error matrix
-          tcov_norm <- norm(Sigma - tcov_matrix, type = "F")
+          tcov_regular_norm <- norm(Sigma - tcov_regular_matrix, type = "F")
           data.frame(
             Run = r,
             scales = num_scales,
             items = p,
             epsilon = epsilon,
-            Method = "TCov",
-            Norm = tcov_norm
+            Method = "TCov regular",
+            Norm = tcov_regular_norm
+          )
+        }, error = function(e)
+          NULL, warning = function(w)
+            NULL)
+        
+        # compute Frobenius norm of the estimation error matrix for tcov
+        df_tcov_man_norm <- tryCatch({
+          # get the transformed Kendall matrix and multiply it with scale to get the scatter matrix
+          tcov_man_matrix <- tcov_man_cpp(data, 2)
+          # get the Frobenius norm of the error matrix
+          tcov_man_norm <- norm(Sigma - tcov_man_matrix, type = "F")
+          data.frame(
+            Run = r,
+            scales = num_scales,
+            items = p,
+            epsilon = epsilon,
+            Method = "TCov Manhattan",
+            Norm = tcov_man_norm
           )
         }, error = function(e)
           NULL, warning = function(w)
@@ -177,7 +196,7 @@ results_list_scale <- parallel::mclapply(scales, function(num_scales) {
             NULL)
         
         # combine results
-        rbind(df_tcov_norm, df_trans_kendall_norm, df_covariance_norm)
+        rbind(df_tcov_man_norm, df_tcov_regular_norm, df_trans_kendall_norm, df_covariance_norm)
         
       })
       
@@ -200,7 +219,7 @@ results_scale <- do.call(rbind, results_list_scale)
 # Get the amount of missing observations
 
 total_estimators_possible <- R * length(p_seq) * length(epsilons) * length(scales)
-total_estimators_actual <- nrow(results_scale) / 3
+total_estimators_actual <- nrow(results_scale) / 4
 useless_count <- total_estimators_possible - total_estimators_actual
 
 # save results to file
@@ -233,7 +252,7 @@ aggregated <- results_scale %>%
 # plot average results over the simulation runs
 library("ggplot2")
 p_line <-
-  ggplot(aggregated, aes(x = items, y = Norm, color = Method, linetype = factor(scales))) +
+  ggplot(aggregated, aes(x = items, y = Norm, color = Method)) +
   geom_line() +
   facet_grid(factor(scales) ~ factor(epsilon)) +
   
