@@ -12,7 +12,7 @@ arma::mat tcov_cpp(const arma::mat& x, const double& beta) {
   const arma::uword p = x.n_cols;
 
   // In the paper, we have w(x) = exp(-x/2). But since we always call
-  // w(beta * r^2), we instead set b = -beta/2 and use w(x) = exp(x).
+  // w(beta * r^2), we instead set b = -beta/2 and use w(x) = exp(x)
   const double b = -beta / 2.0;
 
   // compute inverse of the sample covariance matrix
@@ -28,12 +28,10 @@ arma::mat tcov_cpp(const arma::mat& x, const double& beta) {
     for(j = 0; j < i; j++) {
       // compute difference of current pair of observations
       for(k = 0; k < p; k++) diff(k) = x(i,k) - x(j,k);
-      // compute squared pairwise Mahalanobis distance
+      // compute squared pairwise Manhattan Distance
       r_sq = 0.0;
       for(k = 0; k < p; k++) {
-        for(l = 0; l < p; l++) {
-          r_sq += diff(k) * cov_inv(k,l) * diff(l);
-        }
+        r_sq += diff(k)*diff(k);
       }
       // compute weight for current pair of observations
       w = exp(b * r_sq);
