@@ -31,7 +31,7 @@ arma::mat tcov_man_cpp(const arma::mat& x, const double& beta) {
       // compute squared pairwise Manhattan Distance
       r_sq = 0.0;
       for(k = 0; k < p; k++) {
-        r_sq += diff(k)*diff(k);
+        r_sq += abs(diff(k));
       }
       // compute weight for current pair of observations
       w = exp(b * r_sq);
