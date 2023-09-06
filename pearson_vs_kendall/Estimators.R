@@ -20,7 +20,7 @@ sourceCpp("cpp/tcov_regular.cpp")
 
 
 # control parameters for data generation
-n <- 100                                # number of observations
+n <- 101                                # number of observations
 scales <- seq(2,4)                     # number of scales
 p_seq <- seq(2, 10)                         # number of items per scale
 prob = c(0.05, 0.25, 0.4, 0.25, 0.05)   # get base probabilities
