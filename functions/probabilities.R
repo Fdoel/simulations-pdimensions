@@ -17,3 +17,11 @@ likert_prob <- function(bins, likert_mean = (1 + bins)/2, likert_sd = bins/4) {
   y <- dplyr::lag(x, default = 0)
   x - y
 }
+
+mamd <- function(x) {
+  mean_x <- mean(x)
+  for(i in 1:length(x)) {
+    x[i] <- abs(x[i] - mean_x)
+  }
+  median(x)/0.675
+}
