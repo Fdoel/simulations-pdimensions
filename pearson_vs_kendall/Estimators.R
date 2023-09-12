@@ -20,16 +20,16 @@ sourceCpp("cpp/tcov_regular.cpp")
 
 
 # control parameters for data generation
-n <- 101                                # number of observations
+n <- 150                                # number of observations
 scales <- seq(2,4)                     # number of scales
-p_seq <- seq(2, 10)                         # number of items per scale
-prob = c(0.05, 0.25, 0.4, 0.25, 0.05)   # get base probabilities
+p_seq <- seq(5, 10)                         # number of items per scale
+prob = c(0.15, 0.15, 0.4, 0.15, 0.15)   # get base probabilities
 L <- length(prob)                       # number of response categories
 rho_b <- 0.4                            # target correlation between scales
 rho_w <- 0.7                        # target correlation within scales
-R <- 20                                 # number of simulation runs
+R <- 100                                # number of simulation runs
 seed <- 20230111                        # seed of the random number generator
-scale_estimator <- "Pn"                 # type of scale estimator used
+scale_estimator <- "Sd"                 # type of scale estimator used
 true_sd <- likert_sd(prob)              # get the true variance of each variable
 
 # control parameters for random respondents
@@ -46,9 +46,7 @@ if (.Platform$OS.type == "windows") {
 
 # loop over different within correlation levels
 results_list_scale <- parallel::mclapply(scales, function(num_scales) {
-  
   results_list_p <- parallel::mclapply(p_seq, function(p) {
-    
     # define matrix with probabilities of response categories per item
     prob_mat <-  matrix(prob, nrow = num_scales * p, ncol = L, byrow = TRUE)
     
@@ -115,8 +113,8 @@ results_list_scale <- parallel::mclapply(scales, function(num_scales) {
                                 ncol = p * num_scales)
         for (i in 1:(p * num_scales)) {
           scale_estimate[i, i] <-
-            #Change this line to preffered scale estimator
-            Pn(data[, i])
+            #Change this line to prefered scale estimator
+            sd(data[, i])
         }
         
         # compute Frobenius norm of the estimation error matrix for the regular tcov
@@ -252,14 +250,13 @@ aggregated <- results_scale %>%
 # plot average results over the simulation runs
 library("ggplot2")
 p_line <-
-  ggplot(aggregated, aes(x = items, y = Norm, color = Method)) +
-  geom_line() +
+  ggplot(results_scale, aes(x = factor(items), y = Norm, color = Method)) +
+  geom_boxplot() +
   facet_grid(factor(scales) ~ factor(epsilon)) +
   
   # add some cosmetic changes
-  scale_x_continuous(n.breaks = 3) +
+  scale_y_continuous(limits = c(0, 15)) +
   theme_minimal() +
-  xlab("Items per scale") +
   labs(
     title = sprintf(
       "Frobesius norm of variance error matrix using %s",
@@ -271,7 +268,8 @@ p_line <-
       total_estimators_possible,
       useless_count
     )
-  )
+  ) +
+    xlab("Items per scale")
 
 # save plot to file
 file_plot <-
