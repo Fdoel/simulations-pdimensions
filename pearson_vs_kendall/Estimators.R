@@ -15,22 +15,24 @@ library('RcppArmadillo')
 source("functions/block_correlation_matrix_fixed.R")
 source("functions/probabilities.R")
 source("functions/Pn.R")
+source("functions/normalise.R")
 sourceCpp("cpp/tcov_man.cpp")
 sourceCpp("cpp/tcov_regular.cpp")
 
 
 # control parameters for data generation
-n <- 150                                # number of observations
-scales <- seq(2,4)                     # number of scales
-p_seq <- seq(5, 10)                         # number of items per scale
-prob = c(0.15, 0.15, 0.4, 0.15, 0.15)   # get base probabilities
-L <- length(prob)                       # number of response categories
-rho_b <- 0.4                            # target correlation between scales
-rho_w <- 0.7                        # target correlation within scales
-R <- 100                                # number of simulation runs
-seed <- 20230111                        # seed of the random number generator
-scale_estimator <- "Sd"                 # type of scale estimator used
-true_sd <- likert_sd(prob)              # get the true variance of each variable
+n <- 1000                                    # number of observations
+scales <- seq(2, 4)                          # number of scales
+p_seq <-  seq(5, 10)                         # number of items per scale
+prob = likert_prob(5, method = "unif")       # get base probabilities
+dist = "unif"
+L <-length(prob)                             # number of response categories
+rho_b <- 0.4                                 # target correlation between scales
+rho_w <- 0.7                                 # target correlation within scales
+R <- 50                                      # number of simulation runs
+seed <- 20230111                             # seed of the random number generator
+scale_estimator <-"Sd"                       # type of scale estimator used
+true_sd <- likert_sd(prob)                   # get the true variance of each variable
 
 # control parameters for random respondents
 epsilons <- seq(0, 0.3, by = 0.05)
@@ -45,184 +47,207 @@ if (.Platform$OS.type == "windows") {
 }
 
 # loop over different within correlation levels
-results_list_scale <- parallel::mclapply(scales, function(num_scales) {
-  results_list_p <- parallel::mclapply(p_seq, function(p) {
-    # define matrix with probabilities of response categories per item
-    prob_mat <-  matrix(prob, nrow = num_scales * p, ncol = L, byrow = TRUE)
-    
-    # define correlation matrix
-    Rho <- cor_mat_block(num_scales, p, rho_w, rho_b)
-    
-    # define matrix with variance of each variable on the diagonal
-    V <- matrix(0, ncol = p * num_scales, nrow = p * num_scales)
-    diag(V) <- true_sd
-    
-    # Multiply it with standard deviation matrices to get Sigma
-    Sigma <- V %*% Rho %*% V
-    
-    # run simulation
-    cat(paste(Sys.time(), ": starting ...\n"))
-    set.seed(seed)
-    results_list <- parallel::mclapply(seq_len(R), function(r) {
-      # print simulation run
-      cat(paste(Sys.time(), sprintf(":   run = %d\n", r)))
+results_list_scale <-
+  parallel::mclapply(scales, function(num_scales) {
+    results_list_p <- parallel::mclapply(p_seq, function(p) {
+      # define matrix with probabilities of response categories per item
+      prob_mat <-
+        matrix(prob,
+               nrow = num_scales * p,
+               ncol = L,
+               byrow = TRUE)
       
-      # initialize data table
-      initial <- simstudy::genData(n)
-      # generate correlated rating-scale items
-      data <-
-        simstudy::genOrdCat(
-          initial,
-          baseprobs = prob_mat,
-          prefix = "item",
-          corMatrix = Rho
-        )
-      # drop ID and convert to integer matrix
-      data <- as.matrix(data[,-1])
-      storage.mode(data) <- "integer"
+      # define correlation matrix
+      Rho <- cor_mat_block(num_scales, p, rho_w, rho_b)
       
-      # generate probabilities of being a random respondents
-      careless_probabilities <- runif(n)
+      # define matrix with variance of each variable on the diagonal
+      V <- matrix(0,
+                  ncol = p * num_scales,
+                  nrow = p * num_scales)
+      diag(V) <- true_sd
       
-      # order observations according to probabilities of being random respondents,
-      # which makes it easier to keep previous careless respondents the same as the
-      # contamination level increases (for maximum comparability)
-      order <- order(careless_probabilities)
-      data <- data[order,]
-      careless_probabilities <- careless_probabilities[order]
+      # Multiply it with standard deviation matrices to get Sigma
+      Sigma <- V %*% Rho %*% V
       
-      # generate random responses to be used for careless respondents
-      n_careless_max <- sum(careless_probabilities < epsilon_max)
-      data_careless <-
-        replicate(p, sample.int(L, n_careless_max, replace = TRUE))
+      # Normalise by setting det(Simga) equal to 1
+      Sigma <- normalise(Sigma)
       
-      # loop over contamination levels
-      results_r <- lapply(epsilons, function(epsilon) {
-        # turn selected observations into careless respondents: since the
-        # observations are sorted according to the probability of being careless,
-        # this keeps previous careless respondents the same as the contamination
-        # level increases
-        if (epsilon > 0) {
-          careless <- which(careless_probabilities < epsilon)
-          data[careless,] <- data_careless[careless,]
-        }
+      # run simulation
+      cat(paste(Sys.time(), ": starting ...\n"))
+      set.seed(seed)
+      results_list <- parallel::mclapply(seq_len(R), function(r) {
+        # print simulation run
+        cat(paste(Sys.time(), sprintf(":   run = %d\n", r)))
         
-        # Create a scale matrix with variance on the diagonal
-        scale_estimate = matrix(0,
-                                nrow = p * num_scales,
-                                ncol = p * num_scales)
-        for (i in 1:(p * num_scales)) {
-          scale_estimate[i, i] <-
-            #Change this line to prefered scale estimator
-            sd(data[, i])
-        }
-        
-        # compute Frobenius norm of the estimation error matrix for the regular tcov
-        df_tcov_regular_norm <- tryCatch({
-          # get the transformed Kendall matrix and multiply it with scale to get the scatter matrix
-          tcov_regular_matrix <- tcov_regular_cpp(data, 2)
-          # get the Frobenius norm of the error matrix
-          tcov_regular_norm <- norm(Sigma - tcov_regular_matrix, type = "F")
-          data.frame(
-            Run = r,
-            scales = num_scales,
-            items = p,
-            epsilon = epsilon,
-            Method = "TCov regular",
-            Norm = tcov_regular_norm
+        # initialize data table
+        initial <- simstudy::genData(n)
+        # generate correlated rating-scale items
+        data <-
+          simstudy::genOrdCat(
+            initial,
+            baseprobs = prob_mat,
+            prefix = "item",
+            corMatrix = Rho
           )
-        }, error = function(e)
-          NULL, warning = function(w)
-            NULL)
+        # drop ID and convert to integer matrix
+        data <- as.matrix(data[, -1])
+        storage.mode(data) <- "integer"
         
-        # compute Frobenius norm of the estimation error matrix for tcov
-        df_tcov_man_norm <- tryCatch({
-          # get the transformed Kendall matrix and multiply it with scale to get the scatter matrix
-          tcov_man_matrix <- tcov_man_cpp(data, 2)
-          # get the Frobenius norm of the error matrix
-          tcov_man_norm <- norm(Sigma - tcov_man_matrix, type = "F")
-          data.frame(
-            Run = r,
-            scales = num_scales,
-            items = p,
-            epsilon = epsilon,
-            Method = "TCov Manhattan",
-            Norm = tcov_man_norm
-          )
-        }, error = function(e)
-          NULL, warning = function(w)
-            NULL)
+        # generate probabilities of being a random respondents
+        careless_probabilities <- runif(n)
         
-        # compute Frobenius norm of the estimation error matrix for Pearson
-        df_trans_kendall_norm <- tryCatch({
-          if (det(scale_estimate) == 0) {
-            NULL
-          } else {
+        # order observations according to probabilities of being random respondents,
+        # which makes it easier to keep previous careless respondents the same as the
+        # contamination level increases (for maximum comparability)
+        order <- order(careless_probabilities)
+        data <- data[order, ]
+        careless_probabilities <- careless_probabilities[order]
+        
+        # generate random responses to be used for careless respondents
+        n_careless_max <- sum(careless_probabilities < epsilon_max)
+        data_careless <-
+          replicate(p, sample.int(L, n_careless_max, replace = TRUE))
+        
+        # loop over contamination levels
+        results_r <- lapply(epsilons, function(epsilon) {
+          # turn selected observations into careless respondents: since the
+          # observations are sorted according to the probability of being careless,
+          # this keeps previous careless respondents the same as the contamination
+          # level increases
+          if (epsilon > 0) {
+            careless <- which(careless_probabilities < epsilon)
+            data[careless, ] <- data_careless[careless, ]
+          }
+          
+          # Create a scale matrix with variance on the diagonal
+          scale_estimate = matrix(0,
+                                  nrow = p * num_scales,
+                                  ncol = p * num_scales)
+          for (i in 1:(p * num_scales)) {
+            scale_estimate[i, i] <-
+              #Change this line to prefered scale estimator
+              sd(data[, i])
+          }
+          
+          # compute Frobenius norm of the estimation error matrix for the regular tcov
+          df_tcov_regular_norm <- tryCatch({
             # get the transformed Kendall matrix and multiply it with scale to get the scatter matrix
-            kendall_matrix <-
-              scale_estimate %*% sin(pi * 0.5 * cor(data, method = "kendall")) %*% scale_estimate
+            tcov_regular_matrix <- tcov_regular_cpp(data, 2)
+            
+            # Normalise tcov matrix
+            tcov_regular_matrix <- normalise(tcov_regular_matrix)
+            
             # get the Frobenius norm of the error matrix
-            kendall_norm <- norm(Sigma - kendall_matrix, type = "F")
+            tcov_regular_norm <-
+              norm(Sigma - tcov_regular_matrix, type = "F")
             data.frame(
               Run = r,
               scales = num_scales,
               items = p,
               epsilon = epsilon,
-              Method = "Transformed Kendall",
-              Norm = kendall_norm
+              Method = "TCov regular",
+              Norm = tcov_regular_norm
             )
-          }
-        }, error = function(e)
-          NULL, warning = function(w)
-            NULL)
-        
-        # compute Frobenius norm of the estimation error matrix for Pearson
-        df_covariance_norm <- tryCatch({
-          # get the Frobenius norm of the error matrix
-          cov_norm <- norm(Sigma - cov(data), type = "F")
-          data.frame(
-            Run = r,
-            scales = num_scales,
-            items = p,
-            epsilon = epsilon,
-            Method = "Covariance",
-            Norm = cov_norm
+          }, error = function(e)
+            NULL, warning = function(w)
+              NULL)
+          
+          # compute Frobenius norm of the estimation error matrix for tcov
+          df_tcov_man_norm <- tryCatch({
+            # get the transformed Kendall matrix and multiply it with scale to get the scatter matrix
+            tcov_man_matrix <- tcov_man_cpp(data, 2)
+            
+            # Normalise matrix to set det(tcov_man_matrix) = 1
+            tcov_man_matrix <- normalise(tcov_man_matrix)
+            
+            # get the Frobenius norm of the error matrix
+            tcov_man_norm <- norm(Sigma - tcov_man_matrix, type = "F")
+            data.frame(
+              Run = r,
+              scales = num_scales,
+              items = p,
+              epsilon = epsilon,
+              Method = "TCov Manhattan",
+              Norm = tcov_man_norm
+            )
+          }, error = function(e)
+            NULL, warning = function(w)
+              NULL)
+          
+          # compute Frobenius norm of the estimation error matrix for Pearson
+          df_trans_kendall_norm <- tryCatch({
+            if (det(scale_estimate) == 0) {
+              NULL
+            } else {
+              # get the transformed Kendall matrix and multiply it with scale to get the scatter matrix
+              kendall_matrix <-
+                scale_estimate %*% sin(pi * 0.5 * cor(data, method = "kendall")) %*% scale_estimate
+              
+              # Normalise Kendall matrix to set determinant equal to 1
+              kendall_matrix <- normalise(kendall_matrix)
+              
+              # get the Frobenius norm of the error matrix
+              kendall_norm <- norm(Sigma - kendall_matrix, type = "F")
+              data.frame(
+                Run = r,
+                scales = num_scales,
+                items = p,
+                epsilon = epsilon,
+                Method = "Transformed Kendall",
+                Norm = kendall_norm
+              )
+            }
+          }, error = function(e)
+            NULL, warning = function(w)
+              NULL)
+          
+          # compute Frobenius norm of the estimation error matrix for Pearson
+          df_covariance_norm <- tryCatch({
+            # get the Frobenius norm of the error matrix
+            cov_norm <- norm(Sigma - normalise(cov(data)), type = "F")
+            data.frame(
+              Run = r,
+              scales = num_scales,
+              items = p,
+              epsilon = epsilon,
+              Method = "Covariance",
+              Norm = cov_norm
+            )
+            
+          }, error = function(e)
+            NULL, warning = function(w)
+              NULL)
+          
+          # combine results
+          rbind(
+            df_tcov_man_norm,
+            df_tcov_regular_norm,
+            df_trans_kendall_norm,
+            df_covariance_norm
           )
           
-        }, error = function(e)
-          NULL, warning = function(w)
-            NULL)
+        })
         
-        # combine results
-        rbind(df_tcov_man_norm, df_tcov_regular_norm, df_trans_kendall_norm, df_covariance_norm)
+        # combine results from current simulation run into data frame
+        do.call(rbind, results_r)
         
-      })
+      }, mc.cores = n_cores)
       
-      # combine results from current simulation run into data frame
-      do.call(rbind, results_r)
+      # combine results into data frame
+      results <- do.call(rbind, results_list)
       
     }, mc.cores = n_cores)
     
-    # combine results into data frame
-    results <- do.call(rbind, results_list)
+    # combine results into dataframe
+    results_p <- do.call(rbind, results_list_p)
     
   }, mc.cores = n_cores)
-  
-  # combine results into dataframe
-  results_p <- do.call(rbind, results_list_p)
-  
-}, mc.cores = n_cores)
 
 results_scale <- do.call(rbind, results_list_scale)
-# Get the amount of missing observations
-
-total_estimators_possible <- R * length(p_seq) * length(epsilons) * length(scales)
-total_estimators_actual <- nrow(results_scale) / 4
-useless_count <- total_estimators_possible - total_estimators_actual
 
 # save results to file
 file_results <-
-  "pearson_vs_kendall/results/Estimators/results_n=%d-est=%s.RData"
+  "pearson_vs_kendall/results/Estimators/det1/results_n=%d-est=%s-dist=%s.RData"
 save(
   results_scale,
   n,
@@ -231,9 +256,8 @@ save(
   prob,
   rho_w,
   rho_b,
-  useless_count,
   seed,
-  file = sprintf(file_results, n, scale_estimator)
+  file = sprintf(file_results, n, scale_estimator, dist)
 )
 
 # print message that simulation is done
@@ -250,32 +274,31 @@ aggregated <- results_scale %>%
 # plot average results over the simulation runs
 library("ggplot2")
 p_line <-
-  ggplot(results_scale, aes(x = factor(items), y = Norm, color = Method)) +
+  ggplot(results_scale, aes(
+    x = factor(items),
+    y = Norm,
+    color = Method
+  )) +
   geom_boxplot() +
   facet_grid(factor(scales) ~ factor(epsilon)) +
   
   # add some cosmetic changes
-  scale_y_continuous(limits = c(0, 15)) +
+  scale_y_continuous(limits = c(0, 100))
   theme_minimal() +
   labs(
     title = sprintf(
       "Frobesius norm of variance error matrix using %s",
       scale_estimator
     ),
-    subtitle = sprintf("n =% d correlation between scales = %f", n, rho_b),
-    caption = sprintf(
-      "possible runs = %d, missing runs = %f",
-      total_estimators_possible,
-      useless_count
-    )
+    subtitle = sprintf("n =% d correlation between scales = %f", n, rho_b)
   ) +
-    xlab("Items per scale")
+  xlab("Items per scale")
 
 # save plot to file
 file_plot <-
-  "pearson_vs_kendall/figures/Estimators/results_n=%d-estimator=%s.pdf"
+  "pearson_vs_kendall/figures/Estimators/det1/results_n=%d-estimator=%s-dist=%s.pdf"
 pdf(
-  file = sprintf(file_plot, n, scale_estimator),
+  file = sprintf(file_plot, n, scale_estimator,dist),
   width = 8,
   height = 5
 )
